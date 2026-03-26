@@ -9,6 +9,8 @@ function isWall(x, y, grid) {
 }
 
 // Check 4 cardinal extremes of the tank's collision circle
+// NOTE: 4-point probe approximates a circle. Diagonal corner penetration is
+// possible; acceptable for this game's speed and cell size.
 function isPositionValid(x, y, radius, grid) {
   return (
     !isWall(x - radius, y, grid) &&
@@ -45,15 +47,17 @@ function castLosRay(x1, y1, x2, y2, grid) {
   let mapX = Math.floor(x1 / CELL_SIZE);
   let mapY = Math.floor(y1 / CELL_SIZE);
 
-  const deltaDistX = Math.abs(CELL_SIZE / dirX);
-  const deltaDistY = Math.abs(CELL_SIZE / dirY);
+  const deltaDistX = dirX === 0 ? Infinity : Math.abs(CELL_SIZE / dirX);
+  const deltaDistY = dirY === 0 ? Infinity : Math.abs(CELL_SIZE / dirY);
 
-  let sideDistX = dirX < 0
-    ? (x1 - mapX * CELL_SIZE) * Math.abs(1 / dirX)
-    : ((mapX + 1) * CELL_SIZE - x1) * Math.abs(1 / dirX);
-  let sideDistY = dirY < 0
-    ? (y1 - mapY * CELL_SIZE) * Math.abs(1 / dirY)
-    : ((mapY + 1) * CELL_SIZE - y1) * Math.abs(1 / dirY);
+  let sideDistX = dirX === 0 ? Infinity
+    : dirX < 0
+      ? (x1 - mapX * CELL_SIZE) * Math.abs(1 / dirX)
+      : ((mapX + 1) * CELL_SIZE - x1) * Math.abs(1 / dirX);
+  let sideDistY = dirY === 0 ? Infinity
+    : dirY < 0
+      ? (y1 - mapY * CELL_SIZE) * Math.abs(1 / dirY)
+      : ((mapY + 1) * CELL_SIZE - y1) * Math.abs(1 / dirY);
 
   const stepX = dirX < 0 ? -1 : 1;
   const stepY = dirY < 0 ? -1 : 1;

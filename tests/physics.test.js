@@ -77,6 +77,10 @@ describe('castLosRay', () => {
   test('returns false when wall is in the way', () => {
     expect(castLosRay(96, 96, 300, 96, GRID)).toBe(false);
   });
+
+  test('returns true for a vertical ray with clear path', () => {
+    expect(castLosRay(96, 80, 96, 160, GRID)).toBe(true);
+  });
 });
 
 describe('distanceBetween', () => {

@@ -80,10 +80,11 @@ io.on('connection', (socket) => {
     startGame(map);
   });
 
-  socket.on('input', (keys) => {
+  socket.on('input', (payload) => {
     if (!gameState) return;
     const tank = gameState.tanks.get(socket.id);
-    if (tank && tank.hp > 0) tank.inputKeys = keys;
+    // Support both { w, a, s, d, space } and { keys: { w, a, s, d, space } }
+    if (tank && tank.hp > 0) tank.inputKeys = payload.keys ?? payload;
   });
 
   socket.on('disconnect', () => {
@@ -92,7 +93,7 @@ io.on('connection', (socket) => {
     if (socket.id === lobby.hostId) {
       lobby.hostId = lobby.players.length > 0 ? lobby.players[0].id : null;
     }
-    broadcastLobbyState();
+    if (gamePhase === 'lobby') broadcastLobbyState();
   });
 });
 

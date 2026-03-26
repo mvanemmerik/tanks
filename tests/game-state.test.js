@@ -9,12 +9,14 @@ function freshState() {
 }
 
 describe('createGameState', () => {
-  test('initializes with empty tanks, projectiles, scores', () => {
+  test('initializes with empty tanks, projectiles, scores, and auxiliary maps', () => {
     const gs = freshState();
     expect(gs.tanks.size).toBe(0);
     expect(gs.projectiles.size).toBe(0);
     expect(gs.scores.size).toBe(0);
     expect(gs.nextProjectileId).toBe(0);
+    expect(gs.spawnReservations.size).toBe(0);
+    expect(gs.playerNames.size).toBe(0);
   });
 });
 
@@ -28,7 +30,7 @@ describe('selectSpawnPoint', () => {
 
   test('avoids reserved spawn points', () => {
     const gs = freshState();
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < gs.map.spawns.length; i++) {
       if (i !== 3) gs.spawnReservations.set(i, Date.now() + 5000);
     }
     const idx = selectSpawnPoint(gs, []);
@@ -38,11 +40,27 @@ describe('selectSpawnPoint', () => {
   test('falls back to soonest-expiring if all reserved', () => {
     const gs = freshState();
     const now = Date.now();
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < gs.map.spawns.length; i++) {
       gs.spawnReservations.set(i, now + (i + 1) * 1000);
     }
     const idx = selectSpawnPoint(gs, []);
     expect(idx).toBe(0);
+  });
+
+  test('picks spawn farthest from enemies', () => {
+    const gs = freshState();
+    // Enemy near spawn index 0 ([1,1] -> world 96,96)
+    const enemyPositions = [[96, 96]];
+    const idx = selectSpawnPoint(gs, enemyPositions);
+    // Spawn index 0 is at world (96, 96) — same as enemy, should NOT be chosen
+    const [col, row] = gs.map.spawns[idx];
+    const wx = col * 64 + 32;
+    const wy = row * 64 + 32;
+    // The chosen spawn should be farther from (96,96) than spawn 0 is
+    const distChosen = Math.sqrt((wx - 96) ** 2 + (wy - 96) ** 2);
+    expect(distChosen).toBeGreaterThan(0);
+    // Specifically should NOT pick index 0 (the one right next to the enemy)
+    expect(idx).not.toBe(0);
   });
 });
 
@@ -64,6 +82,14 @@ describe('spawnTank', () => {
     spawnTank(gs, 'sock1', 'Alice', false);
     expect(gs.scores.get('sock1')).toBe(0);
   });
+
+  test('does not reset score when same ID spawns again', () => {
+    const gs = freshState();
+    spawnTank(gs, 'sock1', 'Alice', false);
+    gs.scores.set('sock1', 5);
+    spawnTank(gs, 'sock1', 'Alice', false); // respawn
+    expect(gs.scores.get('sock1')).toBe(5);
+  });
 });
 
 describe('addKill', () => {
@@ -72,6 +98,12 @@ describe('addKill', () => {
     spawnTank(gs, 'sock1', 'Alice', false);
     addKill(gs, 'sock1');
     expect(gs.scores.get('sock1')).toBe(1);
+  });
+
+  test('ignores kill for unknown player ID', () => {
+    const gs = freshState();
+    addKill(gs, 'ghost');
+    expect(gs.scores.has('ghost')).toBe(false);
   });
 });
 

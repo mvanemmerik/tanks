@@ -99,6 +99,7 @@ function spawnTank(gs, id, name, isBot) {
 }
 
 function addKill(gs, killerId) {
+  if (!gs.playerNames.has(killerId)) return; // ignore stale/disconnected killers
   const current = gs.scores.get(killerId) || 0;
   gs.scores.set(killerId, current + 1);
 }

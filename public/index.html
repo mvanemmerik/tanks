@@ -3,8 +3,188 @@
 <head>
   <meta charset="UTF-8">
   <title>Spectre Tank Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; color: #0f0; font-family: monospace;
+           display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; }
+    #lobby { text-align: center; max-width: 400px; width: 100%; padding: 20px; }
+    #lobby h1 { font-size: 2rem; letter-spacing: 4px; margin-bottom: 4px; }
+    .sub { opacity: 0.5; font-size: 0.8rem; margin-bottom: 24px; }
+    input[type=text] { background: #000; border: 1px solid #0f0; color: #0f0;
+      font-family: monospace; font-size: 1rem; padding: 8px 12px;
+      width: 100%; margin-bottom: 10px; outline: none; }
+    input[type=text]:focus { box-shadow: 0 0 8px rgba(0,255,0,0.3); }
+    button { background: #000; border: 1px solid #0f0; color: #0f0;
+      font-family: monospace; font-size: 1rem; padding: 8px 24px;
+      cursor: pointer; margin: 4px; }
+    button:hover { background: rgba(0,255,0,0.1); }
+    #error { color: #f44; font-size: 0.85rem; min-height: 16px; margin-bottom: 6px; }
+    #player-list { margin: 16px 0; text-align: left; }
+    #player-list h3 { opacity: 0.6; font-size: 0.75rem; margin-bottom: 6px; }
+    #player-list ul { list-style: none; }
+    #player-list li { padding: 3px 0; }
+    #player-list li.is-host::after { content: ' [HOST]'; opacity: 0.4; font-size: 0.75rem; }
+    #map-select { margin: 12px 0; }
+    #map-select label { opacity: 0.6; font-size: 0.75rem; display: block; margin-bottom: 6px; }
+    select { background: #000; border: 1px solid #0f0; color: #0f0;
+             font-family: monospace; font-size: 0.9rem; padding: 4px 8px; }
+    #waiting-msg { opacity: 0.6; font-size: 0.85rem; margin-top: 12px; }
+    #game { display: none; flex-direction: column; align-items: center; }
+    #game-area { display: flex; border: 1px solid #0f0; }
+    #game-canvas { image-rendering: pixelated; width: 640px; height: 480px; display: block; }
+    #minimap { width: 128px; height: 128px; align-self: flex-start; margin-top: 176px;
+               border-left: 1px solid rgba(0,255,0,0.3); }
+    #hud { width: 769px; height: 28px;
+           border-top: 1px solid rgba(0,255,0,0.3); background: #000; }
+    #overlay { display: none; position: fixed; inset: 0;
+               background: rgba(0,0,0,0.88);
+               align-items: center; justify-content: center;
+               flex-direction: column; text-align: center; z-index: 10; }
+    #overlay h2 { font-size: 2rem; margin-bottom: 12px; }
+    #overlay p { opacity: 0.6; }
+  </style>
 </head>
 <body>
-  <h1>Spectre Tank Game</h1>
+
+<div id="lobby">
+  <h1>SPECTRE</h1>
+  <p class="sub">Tank Combat — Local Network</p>
+
+  <div id="name-section">
+    <input id="name-input" type="text" maxlength="16" placeholder="Enter your name" autofocus>
+    <div id="error"></div>
+    <button id="join-btn">JOIN GAME</button>
+  </div>
+
+  <div id="joined-section" style="display:none">
+    <div id="player-list">
+      <h3>PLAYERS</h3>
+      <ul id="players-ul"></ul>
+    </div>
+    <div id="map-select" style="display:none">
+      <label>SELECT MAP</label>
+      <select id="map-sel">
+        <option value="A">A — Symmetric Maze</option>
+        <option value="B">B — Open Arena</option>
+        <option value="C">C — Rooms + Corridors</option>
+      </select>
+    </div>
+    <button id="start-btn" style="display:none">START GAME</button>
+    <div id="waiting-msg" style="display:none">Waiting for host to start...</div>
+  </div>
+</div>
+
+<div id="game">
+  <div id="game-area">
+    <canvas id="game-canvas" width="320" height="240"></canvas>
+    <canvas id="minimap" width="128" height="128"></canvas>
+  </div>
+  <canvas id="hud" width="769" height="28"></canvas>
+</div>
+
+<div id="overlay">
+  <h2 id="overlay-title">GAME OVER</h2>
+  <p id="overlay-sub">Returning to lobby...</p>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="network.js"></script>
+<script src="renderer.js"></script>
+<script src="game.js"></script>
+<script>
+  let myId = null;
+  let myName = null;
+  let currentGrid = null;
+
+  // Init subsystems
+  Game.init(
+    document.getElementById('game-canvas'),
+    document.getElementById('minimap'),
+    document.getElementById('hud')
+  );
+  Network.connect();
+
+  // Lobby interactions
+  document.getElementById('join-btn').addEventListener('click', () => {
+    const name = document.getElementById('name-input').value.trim();
+    if (!name) { showError('Enter a name'); return; }
+    Network.join(name);
+  });
+
+  document.getElementById('name-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('join-btn').click();
+  });
+
+  document.getElementById('start-btn').addEventListener('click', () => {
+    Network.startGame(document.getElementById('map-sel').value);
+  });
+
+  function showError(msg) {
+    document.getElementById('error').textContent = msg;
+  }
+
+  // Network event handlers
+  Network.on('name-error', ({ message }) => showError(message));
+
+  Network.on('lobby-state', ({ players, hostId }) => {
+    myId = Network.getId();
+    // Update myName in case it changed (e.g. after reconnect)
+    const me = players.find((p) => p.id === myId);
+    if (me) myName = me.name;
+    const isHost = myId === hostId;
+
+    document.getElementById('name-section').style.display = 'none';
+    document.getElementById('joined-section').style.display = 'block';
+    document.getElementById('start-btn').style.display = isHost ? 'inline-block' : 'none';
+    document.getElementById('map-select').style.display = isHost ? 'block' : 'none';
+    document.getElementById('waiting-msg').style.display = isHost ? 'none' : 'block';
+
+    const ul = document.getElementById('players-ul');
+    while (ul.firstChild) ul.removeChild(ul.firstChild);
+    players.forEach(({ id, name }) => {
+      const li = document.createElement('li');
+      li.textContent = name;
+      if (id === hostId) li.classList.add('is-host');
+      ul.appendChild(li);
+    });
+  });
+
+  Network.on('waiting', ({ message }) => {
+    const el = document.getElementById('waiting-msg');
+    el.textContent = message;
+    el.style.display = 'block';
+  });
+
+  Network.on('map-data', ({ grid }) => { currentGrid = grid; });
+
+  Network.on('game-start', () => {
+    myId = Network.getId();
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('game').style.display = 'flex';
+    Game.start(myId);
+  });
+
+  Network.on('game-state', (state) => {
+    state.grid = currentGrid;
+    Game.onGameState(state);
+  });
+
+  Network.on('game-over', ({ winner }) => {
+    Game.stop();
+    document.getElementById('overlay-title').textContent =
+      (winner === myName) ? 'YOU WIN!' : winner + ' WINS!';
+    document.getElementById('overlay').style.display = 'flex';
+
+    setTimeout(() => {
+      currentGrid = null;
+      document.getElementById('overlay').style.display = 'none';
+      document.getElementById('game').style.display = 'none';
+      document.getElementById('lobby').style.display = 'block';
+      document.getElementById('name-section').style.display = 'none';
+      document.getElementById('joined-section').style.display = 'block';
+    }, 5000);
+  });
+</script>
 </body>
 </html>

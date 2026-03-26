@@ -163,6 +163,7 @@ Tanks are rendered as **billboarded wireframe boxes** (always face the camera):
 - **Count**: 3 bots by default in single-player mode
 - **Multiplayer bot fill**: bots fill slots so the total tank count (humans + bots) is always at least 4. Host can override by starting early.
 - **Pathfinding**: waypoints are auto-generated at server startup by placing a node at the center of every non-wall cell. Bots navigate by picking a random adjacent waypoint and moving toward it (simple graph traversal, no A*).
+- **Bot logic runs every tick** (20/sec), same as player physics. To prevent trivial lock-on, bot turn speed is capped at 6°/tick (same as player) — bots cannot instantly face a target.
 - **State machine**:
   1. **Roam**: move toward next random adjacent waypoint
   2. **Engage**: if any human player is within **6 cells** (384 world units) and LOS is clear → turn to face player and shoot. LOS uses the same DDA ray cast as the renderer; only wall cells (grid value 1) block LOS — other tanks do not.
@@ -232,9 +233,10 @@ Tanks are rendered as **billboarded wireframe boxes** (always face the camera):
 ### Mid-Game Join & Lobby Reconvening
 
 - Players who connect during an active game see a "Game in progress — please wait" screen
-- They are added to the FIFO join queue (behind existing players)
-- When the game ends and all players return to lobby, waiting players join the same lobby
-- The returning host retains host status (unless they disconnected); otherwise FIFO order applies
+- They receive **no `game-state` events** — only a `waiting` status event. `game-state` is broadcast only to active in-game players.
+- They are held in a separate **waiting queue** (FIFO by connect time)
+- **Host succession** draws only from the **active player list** (never from the waiting queue). If the host disconnects mid-game, the next active player in original join order becomes host.
+- When the game ends, all active players and waiting players merge into a single lobby. The original host retains host status if still connected; otherwise the first active player in FIFO join order becomes host. Waiting players join behind active players in FIFO order.
 
 ---
 
@@ -263,7 +265,7 @@ Example cell at column 3, row 2: `grid[2][3]`
 
 Spawn point coordinates are in **grid cells** (not world units). Server converts to world units by multiplying by 64 and adding 32 (cell center).
 
-**Spawn selection**: on spawn/respawn, server picks the spawn point (converted to world coords) that maximizes the minimum distance to any currently living enemy tank.
+**Spawn selection**: on spawn/respawn, server picks the spawn point (converted to world coords) that maximizes the minimum distance to any currently living enemy tank. To prevent concurrent collisions (multiple tanks respawning simultaneously to the same point), spawn points are **reserved** for 2 seconds once selected — reserved points are excluded from selection. If all 8 spawn points are reserved, pick the one whose reservation expires soonest.
 
 ### Minimap rendering
 

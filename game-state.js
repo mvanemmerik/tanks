@@ -11,6 +11,7 @@ function createGameState(map) {
     scores: new Map(),
     nextProjectileId: 0,
     spawnReservations: new Map(), // spawnIndex -> expiryTimestamp
+    playerNames: new Map(),  // id -> name, persists across death
   };
 }
 
@@ -93,6 +94,7 @@ function spawnTank(gs, id, name, isBot) {
   };
 
   gs.tanks.set(id, tank);
+  gs.playerNames.set(id, name);
   if (!gs.scores.has(id)) gs.scores.set(id, 0);
 }
 
@@ -104,8 +106,7 @@ function addKill(gs, killerId) {
 function checkWinCondition(gs) {
   for (const [id, score] of gs.scores) {
     if (score >= WIN_KILLS) {
-      const tank = gs.tanks.get(id);
-      return tank ? tank.name : null;
+      return gs.playerNames.get(id) || null;
     }
   }
   return null;

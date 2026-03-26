@@ -1,6 +1,6 @@
 const {
   createGameState, selectSpawnPoint, spawnTank,
-  addKill, checkWinCondition, reserveSpawn,
+  addKill, checkWinCondition, reserveSpawn, createProjectile,
 } = require('../game-state');
 const { MAPS } = require('../maps');
 
@@ -88,5 +88,28 @@ describe('checkWinCondition', () => {
     spawnTank(gs, 'sock1', 'Alice', false);
     gs.scores.set('sock1', 10);
     expect(checkWinCondition(gs)).toBe('Alice');
+  });
+
+  test('returns winner name even when tank is dead (removed from tanks map)', () => {
+    const gs = freshState();
+    spawnTank(gs, 'sock1', 'Alice', false);
+    gs.scores.set('sock1', 10);
+    gs.tanks.delete('sock1');  // simulate death
+    expect(checkWinCondition(gs)).toBe('Alice');
+  });
+});
+
+describe('createProjectile', () => {
+  test('creates projectile and increments nextProjectileId', () => {
+    const gs = freshState();
+    const p = createProjectile(gs, 'sock1', 100, 200, 1.5);
+    expect(p.id).toBe(0);
+    expect(p.ownerId).toBe('sock1');
+    expect(p.x).toBe(100);
+    expect(p.y).toBe(200);
+    expect(p.angle).toBe(1.5);
+    expect(p.distanceTraveled).toBe(0);
+    expect(gs.nextProjectileId).toBe(1);
+    expect(gs.projectiles.get(0)).toBe(p);
   });
 });

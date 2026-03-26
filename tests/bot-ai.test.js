@@ -54,4 +54,25 @@ describe('tickBot', () => {
     tickBot(bot, [], waypoints, GRID_OPEN, Date.now());
     expect(bot.aiState).toBe('roam');
   });
+
+  test('bot does not shoot when cooldown has not expired', () => {
+    const bot = makeTank({ x: 96, y: 96, lastShot: Date.now() + 9999 }); // future lastShot
+    const human = { id: 'h1', x: 128, y: 96, hp: 100, isBot: false };
+    tickBot(bot, [human], waypoints, GRID_OPEN, Date.now());
+    expect(bot.inputKeys.space).toBe(false);
+  });
+
+  test('bot shoots when aligned with target and cooldown elapsed', () => {
+    const bot = makeTank({ x: 96, y: 96, angle: 0, lastShot: 0 });
+    // Human directly to the right (angle 0), within range
+    const human = { id: 'h1', x: 128, y: 96, hp: 100, isBot: false };
+    tickBot(bot, [human], waypoints, GRID_OPEN, Date.now());
+    expect(bot.inputKeys.space).toBe(true);
+  });
+
+  test('bot returns to roam after no target for 2 seconds', () => {
+    const bot = makeTank({ aiState: 'engage', lastTargetSeenAt: Date.now() - 2100 });
+    tickBot(bot, [], waypoints, GRID_OPEN, Date.now());
+    expect(bot.aiState).toBe('roam');
+  });
 });

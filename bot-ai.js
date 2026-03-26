@@ -53,8 +53,10 @@ function tickBot(bot, humanTanks, waypoints, grid, now) {
 
   if (target) {
     bot.aiState = 'engage';
-    bot.noTargetTimer = 0;
+    bot.noTargetTimer = 0;  // keep for backward compat
+    bot.lastTargetSeenAt = 0;  // reset when target is visible
 
+    // Spec: engage state — turn to face and shoot, no forward movement
     // Turn toward target (capped at TURN_SPEED per tick)
     const desiredAngle = Math.atan2(target.y - bot.y, target.x - bot.x);
     const diff = shortestAngleDiff(bot.angle, desiredAngle);
@@ -65,14 +67,15 @@ function tickBot(bot, humanTanks, waypoints, grid, now) {
     // Shoot if roughly aligned and cooldown expired
     if (Math.abs(diff) < Math.PI / 6 && now - bot.lastShot >= SHOOT_COOLDOWN) {
       bot.inputKeys.space = true;
+      bot.lastShot = now;
     }
   } else {
     if (bot.aiState === 'engage') {
-      bot.noTargetTimer += 50; // one tick at 20/sec
-      if (bot.noTargetTimer >= NO_TARGET_TIMEOUT) {
+      if (!bot.lastTargetSeenAt) bot.lastTargetSeenAt = now;
+      if (now - bot.lastTargetSeenAt >= NO_TARGET_TIMEOUT) {
         bot.aiState = 'roam';
         bot.currentWaypoint = null;
-        bot.noTargetTimer = 0;
+        bot.lastTargetSeenAt = 0;
       }
     }
 

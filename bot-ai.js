@@ -99,12 +99,8 @@ function tickBot(bot, humanTanks, waypoints, grid, now) {
     }
   }
 
-  // Apply movement
-  if (bot.inputKeys.w) {
-    const moved = applyMovement(bot.x, bot.y, bot.angle, MOVE_SPEED, grid);
-    bot.x = moved.x;
-    bot.y = moved.y;
-  }
+  // Movement is applied by the server game loop (gameTick), not here.
+  // tickBot only sets inputKeys; gameTick is the single authority for physics.
 }
 
 module.exports = { generateWaypoints, tickBot };

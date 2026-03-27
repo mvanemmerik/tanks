@@ -3,23 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <title>Spectre Tank Game</title>
+  <link rel="icon" href="data:,">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; color: #0f0; font-family: monospace;
            display: flex; align-items: center; justify-content: center;
            min-height: 100vh; }
-    #lobby { text-align: center; max-width: 400px; width: 100%; padding: 20px; }
-    #lobby h1 { font-size: 2rem; letter-spacing: 4px; margin-bottom: 4px; }
+
+    /* ── Shared screen styles ── */
+    .screen { display: none; text-align: center; max-width: 420px; width: 100%; padding: 20px; }
+    .screen.active { display: block; }
+    #game.screen.active { display: flex; flex-direction: column; align-items: center; }
+    #browser.screen { max-width: 540px; }
+
+    h1 { font-size: 2rem; letter-spacing: 4px; margin-bottom: 4px; }
     .sub { opacity: 0.5; font-size: 0.8rem; margin-bottom: 24px; }
+
     input[type=text] { background: #000; border: 1px solid #0f0; color: #0f0;
       font-family: monospace; font-size: 1rem; padding: 8px 12px;
       width: 100%; margin-bottom: 10px; outline: none; }
     input[type=text]:focus { box-shadow: 0 0 8px rgba(0,255,0,0.3); }
+
     button { background: #000; border: 1px solid #0f0; color: #0f0;
       font-family: monospace; font-size: 1rem; padding: 8px 24px;
       cursor: pointer; margin: 4px; }
     button:hover { background: rgba(0,255,0,0.1); }
+    button.secondary { border-color: rgba(0,255,0,0.4); color: rgba(0,255,0,0.6); }
+
     #error { color: #f44; font-size: 0.85rem; min-height: 16px; margin-bottom: 6px; }
+
+    /* ── Landing ── */
+    #join-row { display: flex; gap: 6px; margin-top: 8px; }
+    #join-row input { flex: 1; margin-bottom: 0; }
+
+    /* ── Browser ── */
+    #game-list-items { margin: 16px 0; text-align: left; min-height: 60px; }
+    .game-item { display: flex; align-items: center; justify-content: space-between;
+                 padding: 8px 0; border-bottom: 1px solid rgba(0,255,0,0.2); }
+    .game-item-info { font-size: 0.85rem; opacity: 0.7; }
+
+    /* ── Lobby ── */
+    #room-code-display { opacity: 0.45; font-size: 0.75rem; letter-spacing: 3px; margin-bottom: 14px; }
     #player-list { margin: 16px 0; text-align: left; }
     #player-list h3 { opacity: 0.6; font-size: 0.75rem; margin-bottom: 6px; }
     #player-list ul { list-style: none; }
@@ -30,59 +54,88 @@
     select { background: #000; border: 1px solid #0f0; color: #0f0;
              font-family: monospace; font-size: 0.9rem; padding: 4px 8px; }
     #waiting-msg { opacity: 0.6; font-size: 0.85rem; margin-top: 12px; }
-    #game { display: none; flex-direction: column; align-items: center; }
+
+    /* ── Game ── */
     #game-area { display: flex; border: 1px solid #0f0; }
-    #game-canvas { image-rendering: pixelated; width: 640px; height: 480px; display: block; }
+    #game-canvas { display: block; }
     #minimap { width: 128px; height: 128px; align-self: flex-start; margin-top: 176px;
                border-left: 1px solid rgba(0,255,0,0.3); }
     #hud { width: 769px; height: 28px;
            border-top: 1px solid rgba(0,255,0,0.3); background: #000; }
+
+    /* ── Overlay ── */
     #overlay { display: none; position: fixed; inset: 0;
                background: rgba(0,0,0,0.88);
                align-items: center; justify-content: center;
                flex-direction: column; text-align: center; z-index: 10; }
     #overlay h2 { font-size: 2rem; margin-bottom: 12px; }
     #overlay p { opacity: 0.6; }
+
+    /* ── Mute button ── */
+    #mute-btn { position: fixed; top: 8px; right: 8px; z-index: 20;
+                background: #000; border: 1px solid rgba(0,255,0,0.4);
+                color: rgba(0,255,0,0.6); font-family: monospace;
+                font-size: 0.75rem; padding: 4px 8px; cursor: pointer; }
+    #mute-btn:hover { border-color: #0f0; color: #0f0; }
   </style>
 </head>
 <body>
 
-<div id="lobby">
+<button id="mute-btn">SFX: ON</button>
+
+<!-- Screen: Landing -->
+<div id="landing" class="screen active">
   <h1>SPECTRE</h1>
-  <p class="sub">Tank Combat — Local Network</p>
-
-  <div id="name-section">
-    <input id="name-input" type="text" maxlength="16" placeholder="Enter your name" autofocus>
-    <div id="error"></div>
-    <button id="join-btn">JOIN GAME</button>
-  </div>
-
-  <div id="joined-section" style="display:none">
-    <div id="player-list">
-      <h3>PLAYERS</h3>
-      <ul id="players-ul"></ul>
-    </div>
-    <div id="map-select" style="display:none">
-      <label>SELECT MAP</label>
-      <select id="map-sel">
-        <option value="A">A — Symmetric Maze</option>
-        <option value="B">B — Open Arena</option>
-        <option value="C">C — Rooms + Corridors</option>
-      </select>
-    </div>
-    <button id="start-btn" style="display:none">START GAME</button>
-    <div id="waiting-msg" style="display:none">Waiting for host to start...</div>
+  <p class="sub">Tank Combat</p>
+  <input id="name-input" type="text" maxlength="16" placeholder="Enter your name" autofocus>
+  <div id="error"></div>
+  <button id="create-public-btn">CREATE PUBLIC GAME</button>
+  <button id="create-private-btn" class="secondary">CREATE PRIVATE GAME</button>
+  <button id="browse-btn">BROWSE GAMES</button>
+  <div id="join-row">
+    <input id="code-input" type="text" maxlength="6" placeholder="ROOM CODE">
+    <button id="join-code-btn">JOIN</button>
   </div>
 </div>
 
-<div id="game">
+<!-- Screen: Game Browser -->
+<div id="browser" class="screen">
+  <h1>OPEN GAMES</h1>
+  <div id="game-list-items"></div>
+  <button id="back-from-browser-btn" class="secondary">BACK</button>
+</div>
+
+<!-- Screen: Lobby -->
+<div id="lobby" class="screen">
+  <h1>SPECTRE</h1>
+  <div id="room-code-display"></div>
+  <div id="player-list">
+    <h3>PLAYERS</h3>
+    <ul id="players-ul"></ul>
+  </div>
+  <div id="map-select" style="display:none">
+    <label>SELECT MAP</label>
+    <select id="map-sel">
+      <option value="A">A — Symmetric Maze</option>
+      <option value="B">B — Open Arena</option>
+      <option value="C">C — Rooms + Corridors</option>
+    </select>
+  </div>
+  <button id="start-btn" style="display:none">START GAME</button>
+  <div id="waiting-msg" style="display:none">Waiting for host to start...</div>
+  <button id="leave-btn" class="secondary" style="margin-top:20px">LEAVE ROOM</button>
+</div>
+
+<!-- Screen: Game -->
+<div id="game" class="screen">
   <div id="game-area">
-    <canvas id="game-canvas" width="320" height="240"></canvas>
+    <canvas id="game-canvas" width="640" height="480"></canvas>
     <canvas id="minimap" width="128" height="128"></canvas>
   </div>
   <canvas id="hud" width="769" height="28"></canvas>
 </div>
 
+<!-- Overlay: Game Over -->
 <div id="overlay">
   <h2 id="overlay-title">GAME OVER</h2>
   <p id="overlay-sub">Returning to lobby...</p>
@@ -91,13 +144,14 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="network.js"></script>
 <script src="renderer.js"></script>
+<script src="sound.js"></script>
 <script src="game.js"></script>
 <script>
   let myId = null;
   let myName = null;
   let currentGrid = null;
+  let currentRoomCode = null;
 
-  // Init subsystems
   Game.init(
     document.getElementById('game-canvas'),
     document.getElementById('minimap'),
@@ -105,37 +159,109 @@
   );
   Network.connect();
 
-  // Lobby interactions
-  document.getElementById('join-btn').addEventListener('click', () => {
-    const name = document.getElementById('name-input').value.trim();
-    if (!name) { showError('Enter a name'); return; }
-    Network.join(name);
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach((el) => el.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  function showError(msg) { document.getElementById('error').textContent = msg; }
+  function getName() { return document.getElementById('name-input').value.trim(); }
+
+  // ── Landing ───────────────────────────────────────────────────────────────
+  document.getElementById('create-public-btn').addEventListener('click', () => {
+    const name = getName();
+    if (!name) { showError('Enter a name first'); return; }
+    Sound.unlock();
+    Network.createRoom(name, true);
+  });
+
+  document.getElementById('create-private-btn').addEventListener('click', () => {
+    const name = getName();
+    if (!name) { showError('Enter a name first'); return; }
+    Sound.unlock();
+    Network.createRoom(name, false);
+  });
+
+  document.getElementById('browse-btn').addEventListener('click', () => {
+    showScreen('browser');
+  });
+
+  document.getElementById('join-code-btn').addEventListener('click', () => {
+    const name = getName();
+    const code = document.getElementById('code-input').value.trim().toUpperCase();
+    if (!name) { showError('Enter a name first'); return; }
+    if (!code) { showError('Enter a room code'); return; }
+    Sound.unlock();
+    Network.joinRoom(code, name);
   });
 
   document.getElementById('name-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('join-btn').click();
+    if (e.key === 'Enter') document.getElementById('join-code-btn').click();
   });
 
-  document.getElementById('start-btn').addEventListener('click', () => {
-    Network.startGame(document.getElementById('map-sel').value);
+  // ── Browser ───────────────────────────────────────────────────────────────
+  document.getElementById('back-from-browser-btn').addEventListener('click', () => {
+    showScreen('landing');
   });
 
-  function showError(msg) {
-    document.getElementById('error').textContent = msg;
-  }
+  Network.on('game-list', (list) => {
+    const container = document.getElementById('game-list-items');
+    while (container.firstChild) container.removeChild(container.firstChild);
 
-  // Network event handlers
+    if (list.length === 0) {
+      const p = document.createElement('p');
+      p.style.opacity = '0.4';
+      p.textContent = 'No open games — create one!';
+      container.appendChild(p);
+      return;
+    }
+
+    list.forEach(({ roomCode, playerCount }) => {
+      const div = document.createElement('div');
+      div.className = 'game-item';
+
+      const info = document.createElement('span');
+      info.className = 'game-item-info';
+      info.textContent = roomCode + ' \u00B7 ' + playerCount + ' player' + (playerCount !== 1 ? 's' : '');
+
+      const btn = document.createElement('button');
+      btn.textContent = 'JOIN';
+      btn.addEventListener('click', () => {
+        const name = getName();
+        if (!name) { showScreen('landing'); showError('Enter a name first'); return; }
+        Sound.unlock();
+        Network.joinRoom(roomCode, name);
+      });
+
+      div.appendChild(info);
+      div.appendChild(btn);
+      container.appendChild(div);
+    });
+  });
+
+  // ── Room events ───────────────────────────────────────────────────────────
+  Network.on('room-created', ({ roomCode }) => {
+    currentRoomCode = roomCode;
+    myName = getName();
+    showScreen('lobby');
+  });
+
+  Network.on('room-error', ({ message }) => {
+    showError(message);
+    showScreen('landing');
+  });
+
   Network.on('name-error', ({ message }) => showError(message));
 
+  // ── Lobby ─────────────────────────────────────────────────────────────────
   Network.on('lobby-state', ({ players, hostId }) => {
     myId = Network.getId();
-    // Update myName in case it changed (e.g. after reconnect)
     const me = players.find((p) => p.id === myId);
     if (me) myName = me.name;
     const isHost = myId === hostId;
 
-    document.getElementById('name-section').style.display = 'none';
-    document.getElementById('joined-section').style.display = 'block';
+    document.getElementById('room-code-display').textContent =
+      currentRoomCode ? 'ROOM: ' + currentRoomCode : '';
     document.getElementById('start-btn').style.display = isHost ? 'inline-block' : 'none';
     document.getElementById('map-select').style.display = isHost ? 'block' : 'none';
     document.getElementById('waiting-msg').style.display = isHost ? 'none' : 'block';
@@ -148,20 +274,24 @@
       if (id === hostId) li.classList.add('is-host');
       ul.appendChild(li);
     });
+
+    showScreen('lobby');
   });
 
-  Network.on('waiting', ({ message }) => {
-    const el = document.getElementById('waiting-msg');
-    el.textContent = message;
-    el.style.display = 'block';
+  document.getElementById('start-btn').addEventListener('click', () => {
+    Network.startGame(document.getElementById('map-sel').value);
   });
 
+  document.getElementById('leave-btn').addEventListener('click', () => {
+    location.reload(); // Simplest leave: full reload returns to landing screen
+  });
+
+  // ── Game ──────────────────────────────────────────────────────────────────
   Network.on('map-data', ({ grid }) => { currentGrid = grid; });
 
   Network.on('game-start', () => {
     myId = Network.getId();
-    document.getElementById('lobby').style.display = 'none';
-    document.getElementById('game').style.display = 'flex';
+    showScreen('game');
     Game.start(myId);
   });
 
@@ -172,6 +302,7 @@
 
   Network.on('game-over', ({ winner }) => {
     Game.stop();
+    Sound.victory();
     document.getElementById('overlay-title').textContent =
       (winner === myName) ? 'YOU WIN!' : winner + ' WINS!';
     document.getElementById('overlay').style.display = 'flex';
@@ -179,11 +310,16 @@
     setTimeout(() => {
       currentGrid = null;
       document.getElementById('overlay').style.display = 'none';
-      document.getElementById('game').style.display = 'none';
-      document.getElementById('lobby').style.display = 'block';
-      document.getElementById('name-section').style.display = 'none';
-      document.getElementById('joined-section').style.display = 'block';
+      showScreen('lobby'); // room persists — return to lobby, not landing
     }, 5000);
+  });
+
+  // ── Mute ──────────────────────────────────────────────────────────────────
+  document.getElementById('mute-btn').addEventListener('click', () => {
+    Sound.unlock();
+    Sound.setEnabled(!Sound.isEnabled());
+    document.getElementById('mute-btn').textContent =
+      Sound.isEnabled() ? 'SFX: ON' : 'SFX: OFF';
   });
 </script>
 </body>

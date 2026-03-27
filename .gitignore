@@ -1,2 +1,5 @@
 .superpowers/
 node_modules/
+*.pem
+*.key
+.env

@@ -53,7 +53,7 @@ function broadcastGameList() {
   const list = [];
   for (const room of rooms.values()) {
     if (room.isPublic && room.gamePhase === 'lobby') {
-      list.push({ roomCode: room.code, playerCount: room.lobby.players.length });
+      list.push({ roomCode: room.code, playerCount: room.lobby.players.length, isPublic: room.isPublic });
     }
   }
   io.emit('game-list', list);
@@ -81,14 +81,19 @@ function _resetForTesting() {
 // ── Socket.io ──────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
 
-  // Send current public lobby list to newly connected socket
-  const initialList = [];
-  for (const room of rooms.values()) {
-    if (room.isPublic && room.gamePhase === 'lobby') {
-      initialList.push({ roomCode: room.code, playerCount: room.lobby.players.length });
+  // Send current public lobby list to newly connected socket. A short defer (50 ms) ensures
+  // the client's connect-handler microtask has registered its 'game-list' listener before
+  // the packet arrives — both setImmediate and setTimeout(0) fire within the same engine
+  // event that delivers CONNECT_ACK, so the packet races the listener registration.
+  setTimeout(() => {
+    const initialList = [];
+    for (const room of rooms.values()) {
+      if (room.isPublic && room.gamePhase === 'lobby') {
+        initialList.push({ roomCode: room.code, playerCount: room.lobby.players.length, isPublic: room.isPublic });
+      }
     }
-  }
-  socket.emit('game-list', initialList);
+    socket.emit('game-list', initialList);
+  }, 50);
 
   socket.on('create-room', ({ name, isPublic }) => {
     const n = (name || '').trim().slice(0, 16);
@@ -156,8 +161,6 @@ io.on('connection', (socket) => {
       if (room.gameLoopInterval) clearInterval(room.gameLoopInterval);
       rooms.delete(roomCode);
       broadcastGameList();
-      // Deferred broadcast ensures sockets completing their handshake concurrently also receive the update
-      setImmediate(broadcastGameList);
       return;
     }
 

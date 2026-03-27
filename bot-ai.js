@@ -1,7 +1,7 @@
 const { castLosRay, applyMovement, applyTurn, distanceBetween } = require('./physics');
 
 const CELL_SIZE = 64;
-const ENGAGE_RANGE = 6 * CELL_SIZE;    // 384 world units
+const ENGAGE_RANGE = 8 * CELL_SIZE;    // 512 world units
 const NO_TARGET_TIMEOUT = 2000;         // ms before returning to roam
 const TURN_SPEED = Math.PI / 30;        // 6 degrees per tick, same as player
 const MOVE_SPEED = 4;
@@ -56,12 +56,16 @@ function tickBot(bot, humanTanks, waypoints, grid, now) {
     bot.noTargetTimer = 0;  // keep for backward compat
     bot.lastTargetSeenAt = 0;  // reset when target is visible
 
-    // Spec: engage state — turn to face and shoot, no forward movement
     // Turn toward target (capped at TURN_SPEED per tick)
     const desiredAngle = Math.atan2(target.y - bot.y, target.x - bot.x);
     const diff = shortestAngleDiff(bot.angle, desiredAngle);
     if (Math.abs(diff) > TURN_SPEED) {
       bot.angle = applyTurn(bot.angle, diff > 0 ? TURN_SPEED : -TURN_SPEED);
+    }
+
+    // Advance toward target when roughly facing them and not point-blank
+    if (targetDist > 2 * CELL_SIZE && Math.abs(diff) < Math.PI / 3) {
+      bot.inputKeys.w = true;
     }
 
     // Shoot if roughly aligned and cooldown expired.

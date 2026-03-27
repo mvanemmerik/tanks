@@ -3,10 +3,10 @@ const { io: ioClient } = require('socket.io-client');
 
 // server.js exports {app, server, io}; use a test port to avoid conflicts
 process.env.PORT = '3099';
-const { server, _resetForTesting } = require('../server');
+const { server, io, _resetForTesting } = require('../server');
 
 beforeAll((done) => { server.listen(3099, done); });
-afterAll((done) => { server.close(done); });
+afterAll((done) => { io.disconnectSockets(); server.close(done); });
 
 // Reset server state before each test to prevent cross-test contamination
 beforeEach(() => _resetForTesting());
@@ -92,45 +92,45 @@ test('join-room with unknown code emits room-error', (done) => {
 });
 
 test('game-list includes public lobby rooms only', (done) => {
+  // Attach listener before creating the room so it catches the broadcastGameList() triggered by
+  // create-room. The setImmediate initial broadcast fires before the client listener is attached,
+  // so we cannot rely on it — the create-room broadcast arrives in a later event-loop iteration.
   connect().then((observer) => {
     observer.on('game-list', (list) => {
-      expect(Array.isArray(list)).toBe(true);
-      list.forEach((r) => {
-        expect(r.roomCode).toBeDefined();
-        expect(typeof r.playerCount).toBe('number');
-      });
+      if (list.length === 0) return; // skip initial empty broadcast if it arrives
+      expect(list[0].playerCount).toBe(1);
+      expect(list[0].isPublic).toBe(true);
       observer.disconnect();
       done();
     });
-    // Creating a public room triggers broadcastGameList
-    createRoom('Host', true).then(() => {});
+    createRoom('Host', true); // triggers broadcastGameList() after listener is attached
   });
 });
 
 test('game-list excludes private rooms', (done) => {
+  // Attach listener first, then create the private room. The create-room handler calls
+  // broadcastGameList() which sends an empty list (private room excluded). That broadcast
+  // arrives after the listener is attached.
   connect().then((observer) => {
-    let received = false;
     observer.on('game-list', (list) => {
-      if (!received) {
-        received = true;
-        // Private room must not appear
-        expect(list.length).toBe(0);
-        observer.disconnect();
-        done();
-      }
+      expect(list.length).toBe(0);
+      observer.disconnect();
+      done();
     });
-    createRoom('Host', false).then(() => {});
+    createRoom('Host', false); // triggers broadcastGameList() with empty list
   });
 });
 
 test('room is deleted when last player disconnects', (done) => {
   createRoom('Solo').then(({ socket, roomCode }) => {
     connect().then((observer) => {
-      let created = false;
+      // done() when any broadcast no longer contains the room (handles any ordering of
+      // the initial setImmediate broadcast vs. the post-disconnect broadcastGameList)
       observer.on('game-list', (list) => {
-        if (!created) { created = true; return; } // skip first broadcast (room exists)
-        const stillThere = list.some((r) => r.roomCode === roomCode);
-        if (!stillThere) { observer.disconnect(); done(); }
+        if (!list.some((r) => r.roomCode === roomCode)) {
+          observer.disconnect();
+          done();
+        }
       });
       socket.disconnect();
     });

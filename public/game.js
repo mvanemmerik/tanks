@@ -8,6 +8,9 @@ const Game = (() => {
   let lastGameState = null;
   let animFrame = null;
   let running = false;
+  let prevProjectileIds = new Set();
+  let prevTankHp = new Map();
+  let shootCooldownUntil = 0;
 
   const keyMap = {
     'w': 'w', 'arrowup': 'w',
@@ -26,10 +29,23 @@ const Game = (() => {
 
   function setupInput() {
     document.addEventListener('keydown', (e) => {
+      if (!e.key) return;
       const k = keyMap[e.key.toLowerCase()];
-      if (k) { e.preventDefault(); keys[k] = true; }
+      if (k) {
+        e.preventDefault();
+        keys[k] = true;
+        // Immediate shoot feedback — don't wait for server round-trip
+        if (k === 'space' && running) {
+          const now = Date.now();
+          if (now >= shootCooldownUntil) {
+            Sound.shoot();
+            shootCooldownUntil = now + 500;
+          }
+        }
+      }
     });
     document.addEventListener('keyup', (e) => {
+      if (!e.key) return;
       const k = keyMap[e.key.toLowerCase()];
       if (k) keys[k] = false;
     });
@@ -38,6 +54,10 @@ const Game = (() => {
   function start(playerId) {
     localPlayerId = playerId;
     running = true;
+    prevProjectileIds = new Set();
+    prevTankHp = new Map();
+    shootCooldownUntil = 0;
+    Sound.unlock();
     loop();
   }
 
@@ -47,7 +67,35 @@ const Game = (() => {
   }
 
   function onGameState(state) {
+    detectSoundEvents(state);
     lastGameState = state;
+  }
+
+  function detectSoundEvents(state) {
+    if (!state.tanks || !state.projectiles) return;
+
+    // Detect new projectiles → enemy shoot sounds
+    // (player shoot sound is handled immediately on keydown)
+    const currentIds = new Set(state.projectiles.map((p) => p.id));
+    for (const proj of state.projectiles) {
+      if (!prevProjectileIds.has(proj.id) && proj.ownerId !== localPlayerId) {
+        Sound.shootEnemy();
+      }
+    }
+    prevProjectileIds = currentIds;
+
+    // Detect HP changes → hit / explode sounds
+    for (const tank of state.tanks) {
+      const prev = prevTankHp.get(tank.id);
+      if (prev !== undefined && prev > 0 && tank.hp < prev) {
+        if (tank.hp <= 0) {
+          tank.id === localPlayerId ? Sound.playerExplode() : Sound.explode();
+        } else {
+          Sound.hit();
+        }
+      }
+      prevTankHp.set(tank.id, tank.hp);
+    }
   }
 
   function loop() {

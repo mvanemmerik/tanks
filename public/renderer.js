@@ -5,8 +5,8 @@ const Renderer = (() => {
   const CELL_SIZE = 64;
   const FOV = 66 * Math.PI / 180;
   const HALF_FOV = FOV / 2;
-  const CANVAS_W = 320;
-  const CANVAS_H = 240;
+  const CANVAS_W = 640;
+  const CANVAS_H = 480;
   const MAX_DIST = 8 * CELL_SIZE;
   const GREEN = '#00ff00';
 
@@ -15,7 +15,9 @@ const Renderer = (() => {
 
   function init(gameCanvas, minimapCanvas) {
     ctx = gameCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
     mapCtx = minimapCanvas.getContext('2d');
+    mapCtx.imageSmoothingEnabled = false;
   }
 
   // DDA ray cast. Returns { dist, side, mapX, mapY }.
@@ -133,10 +135,12 @@ const Renderer = (() => {
     if (Math.abs(normAngle) > HALF_FOV + 0.3) return;
 
     const screenX = Math.floor(CANVAS_W / 2 + Math.tan(normAngle) * (CANVAS_W / FOV));
+    // Perpendicular (fisheye-corrected) depth — must match zBuffer's coordinate space
+    const perpDist = Math.cos(normAngle) * dist;
     const alpha = Math.max(0.18, 1 - dist / MAX_DIST);
 
     if (type === 'tank') {
-      const h = Math.min(CANVAS_H, Math.floor(CELL_SIZE * CANVAS_H / dist));
+      const h = Math.min(CANVAS_H, Math.floor(CELL_SIZE * CANVAS_H / perpDist));
       const w = Math.floor(h * 0.75);
       const top = Math.floor((CANVAS_H - h) / 2);
       const left = screenX - Math.floor(w / 2);
@@ -145,27 +149,28 @@ const Renderer = (() => {
       const c0 = Math.max(0, left);
       const c1 = Math.min(CANVAS_W - 1, left + w);
       for (let c = c0; c <= c1; c++) {
-        if (dist < zBuffer[c]) { visible = true; break; }
+        if (perpDist < zBuffer[c]) { visible = true; break; }
       }
       if (!visible) return;
 
-      ctx.strokeStyle = `rgba(0,255,0,${alpha * 0.9})`;
+      ctx.fillStyle = `rgba(0,255,0,${alpha * 0.9})`;
+      ctx.fillRect(left, top, w, h);
+      ctx.strokeStyle = `rgba(0,0,0,${alpha * 0.6})`;
       ctx.lineWidth = 1;
-      ctx.strokeRect(left, top, w, h);
       ctx.beginPath();
       ctx.moveTo(screenX, top);
       ctx.lineTo(screenX, top - Math.floor(h * 0.25));
       ctx.stroke();
 
     } else {
-      const size = Math.max(3, Math.floor(6 * CANVAS_H / dist));
+      const size = Math.max(3, Math.floor(6 * CANVAS_H / perpDist));
       const cy = Math.floor(CANVAS_H / 2);
 
       let visible = false;
       const c0 = Math.max(0, screenX - 2);
       const c1 = Math.min(CANVAS_W - 1, screenX + 2);
       for (let c = c0; c <= c1; c++) {
-        if (dist < zBuffer[c]) { visible = true; break; }
+        if (perpDist < zBuffer[c]) { visible = true; break; }
       }
       if (!visible) return;
 

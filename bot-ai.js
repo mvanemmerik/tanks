@@ -64,10 +64,11 @@ function tickBot(bot, humanTanks, waypoints, grid, now) {
       bot.angle = applyTurn(bot.angle, diff > 0 ? TURN_SPEED : -TURN_SPEED);
     }
 
-    // Shoot if roughly aligned and cooldown expired
+    // Shoot if roughly aligned and cooldown expired.
+    // Only set inputKeys.space — gameTick owns lastShot updates.
+    // (Setting lastShot here would make gameTick's cooldown check fail immediately.)
     if (Math.abs(diff) < Math.PI / 6 && now - bot.lastShot >= SHOOT_COOLDOWN) {
       bot.inputKeys.space = true;
-      bot.lastShot = now;
     }
   } else {
     if (bot.aiState === 'engage') {

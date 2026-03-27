@@ -56,8 +56,11 @@
     #waiting-msg { opacity: 0.6; font-size: 0.85rem; margin-top: 12px; }
 
     /* ── Game ── */
+    /* Override .screen constraints — game area is wider than the lobby max-width */
+    #game.screen { max-width: none; padding: 0; width: auto; }
     #game-area { display: flex; border: 1px solid #0f0; }
-    #game-canvas { display: block; }
+    /* Pin CSS display size to buffer size so flex cannot inflate the canvas */
+    #game-canvas { display: block; width: 640px; height: 480px; }
     #minimap { width: 128px; height: 128px; align-self: flex-start; margin-top: 176px;
                border-left: 1px solid rgba(0,255,0,0.3); }
     #hud { width: 769px; height: 28px;
